@@ -8,9 +8,6 @@ from lib.clockify_api_call import ClockifyApiCall
 from lib.api_call import RequestTypes
 from lib.workspace import Workspace
 
-# END: 693dd592
-# START: f246c317
-
 parser = argparse.ArgumentParser(description="Analyzes a set of git commits in the given local git repository, "
                                              "and adds them as time entries to Clockify.")
 
