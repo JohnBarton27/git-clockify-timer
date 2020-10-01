@@ -8,10 +8,14 @@ from lib.clockify_api_call import ClockifyApiCall
 from lib.api_call import RequestTypes
 from lib.workspace import Workspace
 
+# END: 693dd592
+# START: f246c317
+
 parser = argparse.ArgumentParser(description="Analyzes a set of git commits in the given local git repository, "
                                              "and adds them as time entries to Clockify.")
 
-parser.add_argument("commit", nargs="+", help="Commit hash(es) to be analyzed")
+parser.add_argument("start_commit", help="First commit to be analyzed")
+parser.add_argument("end_commit", help="Last commit to be analyzed")
 parser.add_argument("--repo-location", "-rl", default=".", nargs="?",
                     help="Path to the git repository to analyze commits [Default: cwd]")
 
@@ -39,14 +43,23 @@ repo = git.Repo(args.repo_location, search_parent_directories=True)
 commits = repo.iter_commits()
 passed_commits = []
 
+in_range = False
 while True:
     try:
         commit = next(commits)
     except StopIteration:
+        if in_range:
+            raise Exception("Ran out of commits, but never found the initial commit!")
         break  # Iterator exhausted: stop the loop
     else:
-        if any(commit.hexsha.startswith(passed_hash) for passed_hash in args.commit):
+        if commit.hexsha.startswith(args.end_commit):
+            in_range = True
+
+        if in_range:
             passed_commits.append(commit)
+
+        if commit.hexsha.startswith(args.start_commit):
+            break
 
 # Reverse to start with the oldest commit
 passed_commits = list(reversed(passed_commits))
@@ -59,9 +72,12 @@ user = user_api_call.exec().json()
 timers_api_call = ClockifyApiCall(RequestTypes.GET, f"/workspaces/{workspace.id}/user/{user['id']}/time-entries")
 timers = timers_api_call.exec().json()
 
-top_timer = timers[0]
+if len(timers) > 0:
+    top_timer = timers[0]
+else:
+    top_timer = None
 timer_running = False
-if not top_timer["timeInterval"]["end"]:
+if top_timer and not top_timer["timeInterval"]["end"]:
     # Timer is running
     print("Timer is running!")
     timer_running = True
@@ -101,7 +117,7 @@ for commit in passed_commits:
         new_time_entry_api_call.exec()
 
         # Wait to allow multiple API calls
-        time.sleep(5)
+        time.sleep(10)
 
 # If the timer was running, restart it
 if timer_running:
